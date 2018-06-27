@@ -1,0 +1,11 @@
+[packages]
+petpeeve = { editable = true, path = '.' }
+
+[dev-packages]
+invoke = '*'
+parver = '*'
+towncrier = '*'
+wheel = '*'
+
+[scripts]
+release = 'inv release'
