@@ -1,4 +1,4 @@
 try:
-    import urllib.parse as urllib_parse
+    from collections.abc import Collection
 except ImportError:
-    import urlparse as urllib_parse     # noqa
+    from collections import Collection  # noqa
