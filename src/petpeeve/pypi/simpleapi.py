@@ -8,6 +8,16 @@ from pip._vendor.packaging import (
 )
 from pip._vendor import requests, six
 
+from wheel import pep425tags
+
+from petpeeve._compat.functools import lru_cache
+
+
+def is_specified(specifier, version):
+    for _ in specifier.filter([version]):
+        return True
+    return False
+
 
 class Link(object):
     """Represents a link in the simple API page.
@@ -24,16 +34,25 @@ class Link(object):
         self.info = self.parse_for_info()
 
     def __repr__(self):
-        return '<{type} {url}>'.format(type=type(self).__name__, url=self.url)
+        return '<{type} {filename}>'.format(
+            type=type(self).__name__,
+            filename=self.filename,
+        )
+
+    @property
+    def filename(self):
+        return self.file_stem + self.extension
 
     def parse_for_info(self):
         raise NotImplementedError
 
-    def is_python_match(self, version_info):
+    def available_for(self, requirement, python_version_info):
+        if not python_version_info:
+            return True
         python_version = packaging_version.parse('.'.join(
-            str(i) for i in version_info[:3]
+            str(i) for i in python_version_info[:3]
         ))
-        return bool(self.python_specifier.filter([python_version]))
+        return is_specified(self.python_specifier, python_version)
 
 
 SourceInformation = collections.namedtuple('SourceInformation', [
@@ -43,9 +62,17 @@ SourceInformation = collections.namedtuple('SourceInformation', [
 
 
 class SourceDistributionLink(Link):
+    """Link to an sdist.
+    """
     def parse_for_info(self):
         name, ver = self.file_stem.rsplit('-', 1)
         return SourceInformation(name, packaging_version.parse(ver))
+
+    def available_for(self, requirement, python_version_info):
+        ok = super(SourceDistributionLink, self).available_for(
+            requirement, python_version_info,
+        )
+        return ok and is_specified(requirement.specifier, self.info.version)
 
 
 WheelInformation = collections.namedtuple('WheelInformation', [
@@ -59,6 +86,8 @@ WheelInformation = collections.namedtuple('WheelInformation', [
 
 
 class WheelDistributionLink(Link):
+    """Link to a wheel.
+    """
     def parse_for_info(self):
         """Parse the wheel's file name according to PEP427.
 
@@ -73,6 +102,24 @@ class WheelDistributionLink(Link):
             build = None
         version = packaging_version.parse(ver)
         return WheelInformation(name, version, build, impl, abi, plat)
+
+    def available_for(self, requirement, python_version_info):
+        ok = super(WheelDistributionLink, self).available_for(
+            requirement, python_version_info,
+        )
+        if not ok:
+            return False
+        if not is_specified(requirement.specifier, self.info.version):
+            return False
+        supported_tags = pep425tags.get_supported()
+        wheel_tag = (
+            self.info.language_implementation_tag,
+            self.info.abi_tag,
+            self.info.platform_tag,
+        )
+        if wheel_tag not in supported_tags:
+            return False
+        return True
 
 
 class UnwantedLink(ValueError):
@@ -143,12 +190,18 @@ class PackageNotFound(APIError, ValueError):
     pass
 
 
+PYPI_PAGE_CACHE_SIZE = 50   # Should be reasonable?
+
+
 class IndexServer(object):
 
     def __init__(self, base_url):
         self.base_url = base_url
 
-    def _get_links(self, package):
+    @lru_cache(maxsize=PYPI_PAGE_CACHE_SIZE)
+    def get_package_links(self, package):
+        """Get links on a simple API page.
+        """
         url = posixpath.join(self.base_url, package)
         response = requests.get(url)
         if response.status_code == 404:
@@ -158,3 +211,21 @@ class IndexServer(object):
         parser = SimplePageParser()
         parser.feed(response.text)
         return parser.links
+
+    def iter_links(self, requirement, python_version_info):
+        """Iterate through links matching this requirement.
+
+        :param requirement: A :class:`packaging.requirements.Requirement`
+            instance specifying a package requirement.
+        :param python_version_info: If truthy, should be a 3+-tuple (e.g.
+            ``sys.version_info``), and is used to compare against the link's
+            requires-python info, and excludes those not matching. If falsy,
+            the comparison is skipped.
+        """
+        links = self.get_package_links(requirement.name)
+
+        # Optimization: Latest packages are preferred, and usually listed last.
+        for link in reversed(links):
+            if not link.available_for(requirement, python_version_info):
+                continue
+            yield link
