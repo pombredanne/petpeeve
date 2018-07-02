@@ -46,13 +46,31 @@ class Link(object):
     def parse_for_info(self):
         raise NotImplementedError
 
-    def available_for(self, requirement, python_version_info):
-        if not python_version_info:
+    def is_version_specified(self, requirement):
+        try:
+            version = self.info.version
+        except AttributeError:
             return True
-        python_version = packaging_version.parse('.'.join(
-            str(i) for i in python_version_info[:3]
-        ))
-        return is_specified(self.python_specifier, python_version)
+        if not is_specified(requirement.specifier, version):
+            return False
+        return True
+
+    def is_python_compatible(self, python_version_info):
+        """Check if the requires-python info matches specified environment.
+
+        :param python_version_info: If truthy, should be a 3+-tuple (e.g.
+            ``sys.version_info``). If falsy, result is always `True`.
+        """
+        if python_version_info:
+            python_version = packaging_version.parse('.'.join(
+                str(i) for i in python_version_info[:3]
+            ))
+            if not is_specified(self.python_specifier, python_version):
+                return False
+        return True
+
+    def is_binary_compatible(self):
+        raise NotImplementedError
 
 
 SourceInformation = collections.namedtuple('SourceInformation', [
@@ -68,11 +86,8 @@ class SourceDistributionLink(Link):
         name, ver = self.file_stem.rsplit('-', 1)
         return SourceInformation(name, packaging_version.parse(ver))
 
-    def available_for(self, requirement, python_version_info):
-        ok = super(SourceDistributionLink, self).available_for(
-            requirement, python_version_info,
-        )
-        return ok and is_specified(requirement.specifier, self.info.version)
+    def is_binary_compatible(self):
+        return True
 
 
 WheelInformation = collections.namedtuple('WheelInformation', [
@@ -103,14 +118,7 @@ class WheelDistributionLink(Link):
         version = packaging_version.parse(ver)
         return WheelInformation(name, version, build, impl, abi, plat)
 
-    def available_for(self, requirement, python_version_info):
-        ok = super(WheelDistributionLink, self).available_for(
-            requirement, python_version_info,
-        )
-        if not ok:
-            return False
-        if not is_specified(requirement.specifier, self.info.version):
-            return False
+    def is_binary_compatible(self):
         supported_tags = pep425tags.get_supported()
         wheel_tag = (
             self.info.language_implementation_tag,
@@ -212,20 +220,16 @@ class IndexServer(object):
         parser.feed(response.text)
         return parser.links
 
-    def iter_links(self, requirement, python_version_info):
+    def iter_links(self, requirement):
         """Iterate through links matching this requirement.
 
         :param requirement: A :class:`packaging.requirements.Requirement`
             instance specifying a package requirement.
-        :param python_version_info: If truthy, should be a 3+-tuple (e.g.
-            ``sys.version_info``), and is used to compare against the link's
-            requires-python info, and excludes those not matching. If falsy,
-            the comparison is skipped.
         """
         links = self.get_package_links(requirement.name)
 
         # Optimization: Latest packages are preferred, and usually listed last.
         for link in reversed(links):
-            if not link.available_for(requirement, python_version_info):
+            if not link.is_version_specified(requirement):
                 continue
             yield link
