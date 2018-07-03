@@ -1,16 +1,11 @@
 import collections
 import functools
-import posixpath
+import sys
+import warnings
 
-from pip._vendor.packaging import (
-    specifiers as packaging_specifiers,
-    version as packaging_version,
-)
-from pip._vendor import requests, six
+from pip._vendor.packaging import version as packaging_version
 
 from wheel import pep425tags
-
-from petpeeve._compat.functools import lru_cache
 
 
 def is_specified(specifier, version):
@@ -58,8 +53,8 @@ class Link(object):
     def is_python_compatible(self, python_version_info):
         """Check if the requires-python info matches specified environment.
 
-        :param python_version_info: If truthy, should be a 3+-tuple (e.g.
-            ``sys.version_info``). If falsy, result is always `True`.
+        If `python_version_info` is truthy, should be a 3+-tuple (e.g.
+        ``sys.version_info``). If falsy, result is always `True`.
         """
         if python_version_info:
             python_version = packaging_version.parse('.'.join(
@@ -68,9 +63,6 @@ class Link(object):
             if not is_specified(self.python_specifier, python_version):
                 return False
         return True
-
-    def is_binary_compatible(self):
-        raise NotImplementedError
 
 
 SourceInformation = collections.namedtuple('SourceInformation', [
@@ -85,9 +77,6 @@ class SourceDistributionLink(Link):
     def parse_for_info(self):
         name, ver = self.file_stem.rsplit('-', 1)
         return SourceInformation(name, packaging_version.parse(ver))
-
-    def is_binary_compatible(self):
-        return True
 
 
 WheelInformation = collections.namedtuple('WheelInformation', [
@@ -119,7 +108,12 @@ class WheelDistributionLink(Link):
         return WheelInformation(name, version, build, impl, abi, plat)
 
     def is_binary_compatible(self):
-        supported_tags = pep425tags.get_supported()
+        with warnings.catch_warnings():
+            # Ignore "Python ABI tag may be incorrect" warnings on Windows.
+            # Windows wheels don't specify those anyway.
+            if sys.platform.startswith('win'):
+                warnings.simplefilter('ignore')
+            supported_tags = pep425tags.get_supported()
         wheel_tag = (
             self.info.language_implementation_tag,
             self.info.abi_tag,
@@ -137,6 +131,7 @@ class UnwantedLink(ValueError):
 WANTED_EXTENSIONS = [
     ('.whl', WheelDistributionLink),
     ('.tar.gz', SourceDistributionLink),
+    ('.tar.bz2', SourceDistributionLink),
     ('.zip', SourceDistributionLink),
 ]
 
@@ -155,81 +150,3 @@ def select_link_constructor(filename):
                 file_extension=ext,
             )
     raise UnwantedLink(filename)
-
-
-class SimplePageParser(six.moves.html_parser.HTMLParser):
-    """Parser to scrap links from a simple API page.
-    """
-    def __init__(self):
-        super(SimplePageParser, self).__init__()
-        self.links = []
-
-    def handle_starttag(self, tag, attrs):
-        if tag != 'a':
-            return
-        url = None
-        python_specifier = packaging_specifiers.SpecifierSet('')
-        for attr, value in attrs:
-            if attr == 'href':
-                url_parts = six.moves.urllib_parse.urlsplit(value)
-                checksum = url_parts.fragment
-                url = six.moves.urllib_parse.urlunsplit(
-                    url_parts._replace(fragment=''),
-                )
-            elif attr == 'data-requires-python':
-                python_specifier = packaging_specifiers.SpecifierSet(value)
-        if not url:
-            return
-        try:
-            link_ctor = select_link_constructor(url.rsplit('/', 1)[-1])
-        except UnwantedLink:
-            return
-        self.links.append(link_ctor(
-            url=url, checksum=checksum,
-            python_specifier=python_specifier,
-        ))
-
-
-class APIError(RuntimeError):
-    pass
-
-
-class PackageNotFound(APIError, ValueError):
-    pass
-
-
-PYPI_PAGE_CACHE_SIZE = 50   # Should be reasonable?
-
-
-class IndexServer(object):
-
-    def __init__(self, base_url):
-        self.base_url = base_url
-
-    @lru_cache(maxsize=PYPI_PAGE_CACHE_SIZE)
-    def get_package_links(self, package):
-        """Get links on a simple API page.
-        """
-        url = posixpath.join(self.base_url, package)
-        response = requests.get(url)
-        if response.status_code == 404:
-            raise PackageNotFound(package)
-        elif not response.ok:
-            raise APIError(response.reason)
-        parser = SimplePageParser()
-        parser.feed(response.text)
-        return parser.links
-
-    def iter_links(self, requirement):
-        """Iterate through links matching this requirement.
-
-        :param requirement: A :class:`packaging.requirements.Requirement`
-            instance specifying a package requirement.
-        """
-        links = self.get_package_links(requirement.name)
-
-        # Optimization: Latest packages are preferred, and usually listed last.
-        for link in reversed(links):
-            if not link.is_version_specified(requirement):
-                continue
-            yield link
