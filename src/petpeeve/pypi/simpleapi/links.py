@@ -64,6 +64,13 @@ class Link(object):
                 return False
         return True
 
+    def as_wheel(self):
+        """Build a representation of a local wheel artifact with the link.
+
+        The return value should probably be distlib.wheel.Wheel? I don't know.
+        """
+        raise NotImplementedError
+
 
 SourceInformation = collections.namedtuple('SourceInformation', [
     'distribution_name',
@@ -77,6 +84,12 @@ class SourceDistributionLink(Link):
     def parse_for_info(self):
         name, ver = self.file_stem.rsplit('-', 1)
         return SourceInformation(name, packaging_version.parse(ver))
+
+    def as_wheel(self):
+        # 1. Download the wheel (use the wheel cache if possible)
+        # 2. Build an ephemeral wheel. (How do we clean this up?)
+        # 3. Wrap the wheel.
+        pass
 
 
 WheelInformation = collections.namedtuple('WheelInformation', [
@@ -122,6 +135,11 @@ class WheelDistributionLink(Link):
         if wheel_tag not in supported_tags:
             return False
         return True
+
+    def as_wheel(self):
+        # 1. Download the wheel (use the wheel cache if possible)
+        # 2. Wrap it.
+        pass
 
 
 class UnwantedLink(ValueError):
