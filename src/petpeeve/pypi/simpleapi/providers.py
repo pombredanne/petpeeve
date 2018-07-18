@@ -1,4 +1,19 @@
+import functools
+
 from petpeeve._compat import collections_abc
+
+
+def get_links_sort_key(link, python_version_info):
+    try:
+        is_binary_compatible = link.is_binary_compatible
+    except AttributeError:
+        binary_compatibility = 0
+    else:
+        binary_compatibility = 1 if is_binary_compatible() else -1
+    return (
+        binary_compatibility,
+        link.is_python_compatible(python_version_info),
+    )
 
 
 class LazyDependencyProvider(collections_abc.Mapping):
@@ -29,21 +44,12 @@ class LazyDependencyProvider(collections_abc.Mapping):
 
     def _get_dependencies(self, links):
         # TODO: Do the hard work.
-        # 1. Sort the links by preference.
         # 2. Download them one by one until we get dependencies succesfully.
         # 3. For each, look into the package to find dependencies.
-        def links_sort_key(link):
-            try:
-                is_binary_compatible = link.is_binary_compatible
-            except AttributeError:
-                binary_compatibility = 0
-            else:
-                binary_compatibility = 1 if is_binary_compatible() else -1
-            return (
-                binary_compatibility,
-                link.is_python_compatible(self.python_version_info),
-            )
-
+        links_sort_key = functools.partial(
+            get_links_sort_key,
+            python_version_info=self.python_version_info,
+        )
         for link in sorted(links, key=links_sort_key):
-            dist = link.as_distribution()
-            return dist.get_dependencies()
+            wheel = link.as_wheel()
+            return wheel.get_dependencies()     # Pseudo code.
