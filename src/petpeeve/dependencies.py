@@ -1,35 +1,34 @@
-import collections
-import re
-import warnings
+import itertools
 
 from pip._vendor.packaging.markers import Marker
 from pip._vendor.packaging.requirements import Requirement
 
 
-# I heard Warehouse currently always only put the extra marker at the end,
-# and the operator is always ==, so we cheat a little (a lot?) here.
-# https://github.com/pypa/wheel/blob/f3855494f20724f1ae84/wheel/metadata.py#L53
-EXTRA_RE = re.compile(r"^(?P<requirement>.+?)(?:extra == '(?P<extra>.+?)')?$")
-
-
-def _add_requirements(entry, reqlist):
+def _iter_requirements(entry):
     try:
         requires = entry['requires']
     except KeyError:
-        return reqlist
+        return
     req_iter = (Requirement(s) for s in requires)
     environment = entry.get('environment')
-    if environment:
-        requirements = list(req_iter)
-        for r in requirements:
-            if r.marker:
-                m = Marker('({}) and ({})'.format(environment, r.marker))
-            else:
-                m = Marker(environment)
-            r.marker = m
-        req_iter = iter(requirements)
-    reqlist.extend(req_iter)
-    return reqlist
+    extra = entry.get('extra')
+    if not environment and not extra:
+        return req_iter
+    requirements = list(req_iter)
+    for r in requirements:
+        mparts = []
+        if r.marker:
+            mparts.append(r.marker)
+        if environment:
+            mparts.append(environment)
+        if extra:
+            mparts.append('extra == {!r}'.format(extra))
+        if len(mparts) > 1:
+            m = Marker(' and '.join('({})'.format(p) for p in mparts))
+        else:
+            m = Marker(mparts[0])
+        r.marker = m
+    return iter(requirements)
 
 
 class DependencySet(object):
@@ -39,9 +38,9 @@ class DependencySet(object):
     execution environment. Our resolver needs this to give a machine-agnostic
     dependency tree.
     """
-    def __init__(self, base, extras):
-        self.base = base
-        self.extras = extras
+    def __init__(self, requirements):
+        self.requirements = list(requirements)
+        # TODO: We probably want to include some other metadata as well?
 
     @classmethod
     def from_wheel(cls, wheel):
@@ -50,17 +49,10 @@ class DependencySet(object):
         `wheel` is a `distlib.wheel.Wheel` instance. The metadata is read to
         build the instance.
         """
-        base = []
-        extras = collections.defaultdict(list)
-        for entry in wheel.metadata.run_requires:
-            if 'extra' in entry:
-                name = entry['extra']
-                extras[name] = _add_requirements(entry, extras[name])
-                continue
-            if list(entry.keys()) == ['requires']:
-                base = _add_requirements(entry, base)
-                continue
-        return cls(base, extras)
+        return cls(itertools.chain.from_iterable(
+            _iter_requirements(entry)
+            for entry in wheel.metadata.run_requires
+        ))
 
     @classmethod
     def from_data(cls, info):
@@ -68,31 +60,7 @@ class DependencySet(object):
 
         `info` is a dict-like object, e.g. decoded from a JSON API.
         """
-        requires = info['requires_dist']
-        if not requires:
-            return cls([], {})
+        return cls(Requirement(s) for s in (info['requires_dist'] or []))
 
-        base = []
-        extras = collections.defaultdict(list)
-        for s in requires:
-            requirement = Requirement(s)
-            if not requirement.marker:
-                base.append(requirement)
-                continue
-            match = EXTRA_RE.match(s)
-            if not match:
-                warnings.warn('unrecognized dependency {!r}'.format(s))
-                continue
-            extra_name = match.group('extra')
-            if not extra_name:
-                base.append(requirement)
-                continue
-            s = match.group('requirement').strip()
-            if s.endswith('and'):
-                s = s[:-3].rstrip()
-            if s.endswith(';'):
-                s = s[:-1].rstrip()
-            extra_reqs = extras[extra_name]
-            extra_reqs.append(Requirement(s))
-            extras[extra_name] = extra_reqs
-        return cls(base, extras)
+    def __repr__(self):
+        return 'DependencySet(requirements={!r})'.format(self.requirements)

@@ -8,7 +8,7 @@ from petpeeve._compat.functools import lru_cache
 
 from ..exceptions import APIError, PackageNotFound
 from .links import select_link_constructor, UnwantedLink
-from .providers import LazyDependencyProvider
+from .providers import DependencyMapping
 
 
 class SimplePageParser(six.moves.html_parser.HTMLParser):
@@ -91,7 +91,7 @@ class IndexServer(object):
             instance specifying a package requirement.
         :param python_version_info: A 3+ tuple of integers, or `None`.
         """
-        return LazyDependencyProvider(
+        return DependencyMapping(
             version_links=self._get_versioned_links(requirement),
             python_version_info=python_version_info,
             offline=offline,

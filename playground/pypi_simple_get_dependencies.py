@@ -20,11 +20,7 @@ dependency_provider = index.get_dependencies(
 )
 latest_version = max(dependency_provider.keys())
 
-deps = dependency_provider[latest_version]
+depset = dependency_provider[latest_version]
 print('Version {}:'.format(latest_version))
-print('    {}'.format(deps.base))
-print()
-for n, dl in deps.extras.items():
-    print('  Extra {!r}'.format(n))
-    print('    {}'.format(dl))
-    print()
+for requirement in depset.requirements:
+    print('  {}'.format(requirement))

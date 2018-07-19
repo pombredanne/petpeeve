@@ -18,8 +18,8 @@ def get_links_sort_key(link, python_version_info):
     )
 
 
-class LazyDependencyProvider(collections_abc.Mapping):
-    """A lazy-evaluated dependency provider.
+class DependencyMapping(collections_abc.Mapping):
+    """A lazy-evaluated dependency mapping.
 
     This behaves like a ``collection.OrderedDict``. Each key is a version
     matching the requirement (latest version first); each value is a
