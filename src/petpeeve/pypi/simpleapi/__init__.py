@@ -88,7 +88,10 @@ class IndexServer(object):
     def get_dependencies(self, requirement, python_version_info):
         """Discover dependencies for this requirement.
 
-        Returns an object that behaves like a ``collection.OrderedDict``.
+        Returns an object that behaves like a ``collection.OrderedDict``. Each
+        key is a version matching the requirement (latest version first); each
+        value is a list of requirements representing dependencies specified by
+        that version.
 
         :param requirement: A :class:`packaging.requirements.Requirement`
             instance specifying a package requirement.

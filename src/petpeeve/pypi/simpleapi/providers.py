@@ -20,8 +20,9 @@ class LazyDependencyProvider(collections_abc.Mapping):
     """A lazy-evaluated dependency provider.
 
     This behaves like a ``collection.OrderedDict``. Each key is a version
-    matching the requirement; each value is a list of requirements representing
-    dependencies specified by the given requirement at that version.
+    matching the requirement (latest version first); each value is a list of
+    requirements representing dependencies specified by the given requirement
+    at that version.
     """
     def __init__(self, version_links, python_version_info):
         self.versions = sorted(self.version_links, reverse=True)
