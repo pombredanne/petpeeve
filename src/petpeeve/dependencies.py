@@ -8,7 +8,7 @@ def _add_requirements(entry, reqlist):
     try:
         requires = entry['requires']
     except KeyError:
-        return
+        return reqlist
     req_iter = (Requirement(s) for s in requires)
     environment = entry.get('environment')
     if environment:
