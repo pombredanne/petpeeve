@@ -1,6 +1,8 @@
 import functools
+import warnings
 
 from petpeeve._compat import collections_abc
+from petpeeve.dependencies import DependencySet
 
 
 def get_links_sort_key(link, python_version_info):
@@ -20,14 +22,15 @@ class LazyDependencyProvider(collections_abc.Mapping):
     """A lazy-evaluated dependency provider.
 
     This behaves like a ``collection.OrderedDict``. Each key is a version
-    matching the requirement (latest version first); each value is a list of
-    requirements representing dependencies specified by the given requirement
-    at that version.
+    matching the requirement (latest version first); each value is a
+    `DependencySet` containing requirements, representing dependencies
+    specified by the given requirement at that version.
     """
-    def __init__(self, version_links, python_version_info):
-        self.versions = sorted(self.version_links, reverse=True)
+    def __init__(self, version_links, python_version_info, offline=False):
+        self.versions = sorted(version_links, reverse=True)
         self.links = version_links
         self.python_version_info = python_version_info
+        self.offline = offline
 
     def __contains__(self, key):
         return key in self.links
@@ -44,13 +47,14 @@ class LazyDependencyProvider(collections_abc.Mapping):
         return len(self.versions)
 
     def _get_dependencies(self, links):
-        # TODO: Do the hard work.
-        # 2. Download them one by one until we get dependencies succesfully.
-        # 3. For each, look into the package to find dependencies.
         links_sort_key = functools.partial(
             get_links_sort_key,
             python_version_info=self.python_version_info,
         )
         for link in sorted(links, key=links_sort_key):
-            wheel = link.as_wheel()
-            return wheel.get_dependencies()     # Pseudo code.
+            wheel = link.as_wheel(offline=self.offline)
+            if not wheel:
+                continue
+            return DependencySet.from_wheel(wheel)
+        warnings.warn('failed to find dependencies in link')
+        return []

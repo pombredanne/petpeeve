@@ -85,7 +85,8 @@ class IndexServer(object):
             version_links[version].append(link)
         return version_links
 
-    def get_dependencies(self, requirement, python_version_info):
+    def get_dependencies(
+            self, requirement, python_version_info, offline=False):
         """Discover dependencies for this requirement.
 
         Returns an object that behaves like a ``collection.OrderedDict``. Each
@@ -100,4 +101,5 @@ class IndexServer(object):
         return LazyDependencyProvider(
             version_links=self._get_versioned_links(requirement),
             python_version_info=python_version_info,
+            offline=offline,
         )

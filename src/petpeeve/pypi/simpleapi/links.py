@@ -1,17 +1,24 @@
 import collections
 import functools
+import hashlib
 import sys
 import warnings
 
+from pip._vendor.distlib.wheel import Wheel
 from pip._vendor.packaging import version as packaging_version
-
 from wheel import pep425tags
+
+from petpeeve.wheels import get_built_wheel_path, get_wheel_path
 
 
 def is_specified(specifier, version):
     for _ in specifier.filter([version]):
         return True
     return False
+
+
+class WheelNotFoundError(OSError):
+    pass
 
 
 class Link(object):
@@ -64,10 +71,22 @@ class Link(object):
                 return False
         return True
 
-    def as_wheel(self):
+    def check_download(self, data):
+        """Check if the downloaded data is good.
+        """
+        htype, hvalue = self.checksum.split('=')
+        h = hashlib.new(htype)
+        h.update(data)
+        value = h.hexdigest()
+        if hvalue != value:
+            raise ValueError('expected {}, but got {}'.format(hvalue, value))
+
+    def as_wheel(self, offline=False):
         """Build a representation of a local wheel artifact with the link.
 
-        The return value should probably be distlib.wheel.Wheel? I don't know.
+        The return value is a distlib.wheel.Wheel. If `offline` if `True`,
+        `WheelNotFoundError` is raised if the wheel is not found in the
+        local cache. Otherwise the wheel is downloaded.
         """
         raise NotImplementedError
 
@@ -85,11 +104,13 @@ class SourceDistributionLink(Link):
         name, ver = self.file_stem.rsplit('-', 1)
         return SourceInformation(name, packaging_version.parse(ver))
 
-    def as_wheel(self):
-        # 1. Download the wheel (use the wheel cache if possible)
-        # 2. Build an ephemeral wheel. (How do we clean this up?)
-        # 3. Wrap the wheel.
-        pass
+    def as_wheel(self, offline=False):
+        if offline:     # TODO: Can we peek into the wheel cache here?
+            raise WheelNotFoundError(self.filename)
+        path = get_built_wheel_path(self)
+        if not path:
+            raise WheelNotFoundError(self.filename)
+        return Wheel(path)
 
 
 WheelInformation = collections.namedtuple('WheelInformation', [
@@ -136,16 +157,18 @@ class WheelDistributionLink(Link):
             return False
         return True
 
-    def as_wheel(self):
-        # 1. Download the wheel (use the wheel cache if possible)
-        # 2. Wrap it.
-        pass
+    def as_wheel(self, offline=False):
+        path = get_wheel_path(self, offline)
+        if not path:
+            raise WheelNotFoundError(self.filename)
+        return Wheel(path)
 
 
 class UnwantedLink(ValueError):
     pass
 
 
+# TODO: Maintain this list to support more formats.
 WANTED_EXTENSIONS = [
     ('.whl', WheelDistributionLink),
     ('.tar.gz', SourceDistributionLink),
