@@ -6,6 +6,7 @@ from pip._vendor import requests, six
 
 from petpeeve._compat.functools import lru_cache
 
+from ..exceptions import APIError, PackageNotFound
 from .links import select_link_constructor, UnwantedLink
 from .providers import LazyDependencyProvider
 
@@ -41,14 +42,6 @@ class SimplePageParser(six.moves.html_parser.HTMLParser):
             url=url, checksum=checksum,
             python_specifier=python_specifier,
         ))
-
-
-class APIError(RuntimeError):
-    pass
-
-
-class PackageNotFound(APIError, ValueError):
-    pass
 
 
 PYPI_PAGE_CACHE_SIZE = 50   # Should be reasonable?
