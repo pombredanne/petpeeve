@@ -26,6 +26,10 @@ def _add_requirements(entry, reqlist):
 
 class DependencySet(object):
     """A representation of dependencies of a package.
+
+    This representation is abstract, i.e. completely independent from the
+    execution environment. Our resolver needs this to give a machine-agnostic
+    dependency tree.
     """
     def __init__(self, base, extras):
         self.base = base
