@@ -66,7 +66,7 @@ class IndexServer(object):
         parser.feed(response.text)
         return parser.links
 
-    def _get_versioned_links(self, requirement):
+    def get_versioned_links(self, requirement):
         version_links = collections.defaultdict(list)
         for link in self._get_package_links(requirement.name):
             if not link.is_specified_by_requirement(requirement):
@@ -92,7 +92,7 @@ class IndexServer(object):
         :param python_version_info: A 3+ tuple of integers, or `None`.
         """
         return DependencyMapping(
-            version_links=self._get_versioned_links(requirement),
+            version_links=self.get_versioned_links(requirement),
             python_version_info=python_version_info,
             offline=offline,
         )

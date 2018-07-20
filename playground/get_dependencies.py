@@ -2,28 +2,24 @@ from __future__ import print_function
 
 import argparse
 
-from petpeeve.pypi import legacyjsonapi, simpleapi
+from petpeeve.indexes import build_index
 from pip._vendor.packaging.requirements import Requirement
 
 
 parser = argparse.ArgumentParser()
 parser.add_argument('requirement')
-parser.add_argument('--api', action='store', choices=['simple', 'json'])
+parser.add_argument('--url', action='store', default='https://pypi.org/simple')
 parser.add_argument('--offline', action='store_true')
 options = parser.parse_args()
 
 
 requirement = Requirement(options.requirement)
+index = build_index(options.url)
+print('Using {!r}...'.format(type(index).__name__))
 
-print('Using the {!r} API...'.format(options.api))
-if options.api == 'simple':
-    index = simpleapi.IndexServer('https://pypi.org/simple')
-    dependency_mapping = index.get_dependencies(
-        requirement, None, offline=options.offline,
-    )
-elif options.api == 'json':
-    index = legacyjsonapi.IndexServer('https://pypi.org/pypi')
-    dependency_mapping = index.get_dependencies(requirement)
+dependency_mapping = index.get_dependencies(
+    requirement, None, offline=options.offline,
+)
 
 latest_version = next(iter(dependency_mapping.keys()))
 

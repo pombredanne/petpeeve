@@ -39,7 +39,7 @@ class IndexServer(object):
         return data['info']
 
     @lru_cache(maxsize=PYPI_PACKAGE_CACHE_SIZE)
-    def _get_version_info_getters(self, requirement):
+    def get_version_info_getters(self, requirement):
         package = requirement.name
         response = self._get(package)
         if response.status_code == 404:
@@ -64,5 +64,5 @@ class IndexServer(object):
         :param requirement: A :class:`packaging.requirements.Requirement`
             instance specifying a package requirement.
         """
-        getters = self._get_version_info_getters(requirement)
+        getters = self.get_version_info_getters(requirement)
         return DependencyMapping(version_info_getters=getters)
