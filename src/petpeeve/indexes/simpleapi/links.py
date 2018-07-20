@@ -61,6 +61,8 @@ class Link(object):
     def check_download(self, data):
         """Check if the downloaded data is good.
         """
+        if not self.checksum:
+            return
         htype, hvalue = self.checksum.split('=')
         h = hashlib.new(htype)
         h.update(data)

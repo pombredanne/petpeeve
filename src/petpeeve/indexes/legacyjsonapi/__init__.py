@@ -46,10 +46,14 @@ class IndexServer(object):
             raise PackageNotFound(package)
         elif not response.ok:
             raise APIError(response.reason)
-        data = response.json()
+        try:
+            data = response.json()
+            releases = data['releases']
+        except (KeyError, ValueError, TypeError):
+            raise APIError('incompatible')
         return {
             v: functools.partial(self._get_version_info, package, k)
-            for k, v in ((k, parse_version(k)) for k in data['releases'])
+            for k, v in ((k, parse_version(k)) for k in releases)
             if is_version_specified(requirement.specifier, v)
         }
 

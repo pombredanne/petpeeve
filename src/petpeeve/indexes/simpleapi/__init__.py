@@ -14,28 +14,35 @@ from .providers import DependencyMapping
 class SimplePageParser(six.moves.html_parser.HTMLParser):
     """Parser to scrap links from a simple API page.
     """
-    def __init__(self):
+    def __init__(self, base_url):
         # Can't use super() because HTMLParser was an old-style class.
         six.moves.html_parser.HTMLParser.__init__(self)
+        self.base_url_parts = six.moves.urllib_parse.urlsplit(base_url)
         self.links = []
 
     def handle_starttag(self, tag, attrs):
         if tag != 'a':
             return
-        url = None
+        url_parts = None
         python_specifier = packaging_specifiers.SpecifierSet('')
         for attr, value in attrs:
             if attr == 'href':
                 url_parts = six.moves.urllib_parse.urlsplit(value)
                 checksum = url_parts.fragment
-                url = six.moves.urllib_parse.urlunsplit(
-                    url_parts._replace(fragment=''),
-                )
+                url_parts = url_parts._replace(fragment='')
             elif attr == 'data-requires-python':
                 python_specifier = packaging_specifiers.SpecifierSet(value)
-        if not url:
+        if not url_parts:
             return
         try:
+            replacements = {
+                fn: part
+                for fn, part in zip(url_parts._fields, url_parts)
+                if part or fn == 'fragment'
+            }
+            url = six.moves.urllib_parse.urlunsplit(
+                self.base_url_parts._replace(**replacements),
+            )
             link_ctor = select_link_constructor(url.rsplit('/', 1)[-1])
         except UnwantedLink:
             return
@@ -63,7 +70,7 @@ class IndexServer(object):
             raise PackageNotFound(package)
         elif not response.ok:
             raise APIError(response.reason)
-        parser = SimplePageParser()
+        parser = SimplePageParser(base_url=self.base_url)
         parser.feed(response.text)
         return parser.links
 
