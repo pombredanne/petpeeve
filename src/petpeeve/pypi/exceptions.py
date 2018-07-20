@@ -4,3 +4,7 @@ class APIError(RuntimeError):
 
 class PackageNotFound(APIError, ValueError):
     pass
+
+
+class VersionNotFound(APIError, KeyError):
+    pass

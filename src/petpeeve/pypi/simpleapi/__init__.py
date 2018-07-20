@@ -1,8 +1,8 @@
 import collections
 import posixpath
 
-from pip._vendor.packaging import specifiers as packaging_specifiers
 from pip._vendor import requests, six
+from pip._vendor.packaging import specifiers as packaging_specifiers
 
 from petpeeve._compat.functools import lru_cache
 
@@ -44,7 +44,7 @@ class SimplePageParser(six.moves.html_parser.HTMLParser):
         ))
 
 
-PYPI_PAGE_CACHE_SIZE = 50   # Should be reasonable?
+PYPI_PAGE_CACHE_SIZE = 64   # Should be reasonable?
 
 
 class IndexServer(object):
@@ -69,7 +69,7 @@ class IndexServer(object):
     def _get_versioned_links(self, requirement):
         version_links = collections.defaultdict(list)
         for link in self._get_package_links(requirement.name):
-            if not link.is_version_specified(requirement):
+            if not link.is_specified_by_requirement(requirement):
                 continue
             try:
                 version = link.info.version

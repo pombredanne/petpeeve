@@ -102,14 +102,14 @@ class DependencySet(object):
         return cls(base, extras)
 
     @classmethod
-    def from_data(cls, info):
+    def from_data(cls, requires_dist):
         """Build a dependency set with data obtained from an API.
 
-        `info` is a dict-like object, e.g. decoded from a JSON API.
+        `requires_dist` is a sequence, e.g. decoded from a JSON API.
         """
         base = []
         extras = collections.defaultdict(list)
-        for s in info['requires_dist']:
+        for s in requires_dist:
             requirement, extra = _parse_requirement(s)
             if not extra:
                 base.append(requirement)
