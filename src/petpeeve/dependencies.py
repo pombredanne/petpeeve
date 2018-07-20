@@ -51,7 +51,7 @@ def _add_requires(entry, base, extras):
     """Append all requirements in an entry to the list.
 
     This combines the `environment` key's content into the requirement's
-    existing markers, and append them to the appropriate list(s).
+    existing markers, and add them to the appropriate list(s).
     """
     requires = entry.get('requires')
     if not requires:
@@ -67,11 +67,11 @@ def _add_requires(entry, base, extras):
                 m = Marker(environment)
             r.marker = m
         if not e_extra and not r_extra:
-            base.append(r)
+            base.add(r)
         elif e_extra:
-            extras[e_extra].append(r)
+            extras[e_extra].add(r)
         elif r_extra:
-            extras[r_extra].append(r)
+            extras[r_extra].add(r)
 
 
 class DependencySet(object):
@@ -93,8 +93,8 @@ class DependencySet(object):
         `wheel` is a `distlib.wheel.Wheel` instance. The metadata is read to
         build the instance.
         """
-        base = []
-        extras = collections.defaultdict(list)
+        base = set()
+        extras = collections.defaultdict(set)
         for entry in wheel.metadata.run_requires:
             if isinstance(entry, six.text_type):
                 entry = {'requires': [entry]}
@@ -107,14 +107,14 @@ class DependencySet(object):
 
         `requires_dist` is a sequence, e.g. decoded from a JSON API.
         """
-        base = []
-        extras = collections.defaultdict(list)
+        base = set()
+        extras = collections.defaultdict(set)
         for s in requires_dist:
             requirement, extra = _parse_requirement(s)
             if not extra:
-                base.append(requirement)
+                base.add(requirement)
             else:
                 extra_reqs = extras[extra]
-                extra_reqs.append(requirement)
+                extra_reqs.add(requirement)
                 extras[extra] = extra_reqs
         return cls(base, extras)
