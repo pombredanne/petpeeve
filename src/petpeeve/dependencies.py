@@ -56,7 +56,7 @@ def _add_requires(entry, base, extras):
     requires = entry.get('requires')
     if not requires:
         return
-    environment = entry.get('requirement')
+    environment = entry.get('environment')
     e_extra = entry.get('extra')
     for s in requires:
         r, r_extra = _parse_requirement(s)
