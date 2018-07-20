@@ -22,5 +22,11 @@ latest_version = max(dependency_provider.keys())
 
 depset = dependency_provider[latest_version]
 print('Version {}:'.format(latest_version))
-for requirement in depset.requirements:
-    print('  {}'.format(requirement))
+for requirement in depset.base:
+    print('    {}'.format(requirement))
+print()
+for key, requirements in depset.extras.items():
+    print('  Extra {!r}'.format(key))
+    for requirement in requirements:
+        print('    {}'.format(requirement))
+    print()

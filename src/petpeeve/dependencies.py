@@ -1,34 +1,77 @@
-import itertools
+import collections
+import re
 
+from pip._vendor import six
 from pip._vendor.packaging.markers import Marker
 from pip._vendor.packaging.requirements import Requirement
 
 
-def _iter_requirements(entry):
-    try:
-        requires = entry['requires']
-    except KeyError:
+# I heard Warehouse and Wheel always put the extra marker at the end, and the
+# operator is always ==, so we cheat a little (a lot?) here.
+EXTRA_RE = re.compile(
+    r"""^(?P<requirement>.+?)(?:extra\s*==\s*['"](?P<extra>.+?)['"])$""",
+)
+
+
+def _parse_requirement(s):
+    """Helper function to parse both modern and "legacy" requirement styles.
+
+    Old requirements append the extra key at the end of the environment
+    markers, e.g.::
+
+        PySocks (!=1.5.7,>=1.5.6); extra == 'socks'
+
+    This uses a very naive pattern-matching logic to strip that last part out
+    of the environment markers.
+
+    This kind of formats are used in old wheels and the PyPI's JSON API.
+
+    Returns a 2-tuple `(requirement, extra)`. The first member is a
+    `Requirement` instance, and the second the extra's name. If no extra is
+    detected, the second member will be `None`.
+    """
+    requirement = Requirement(s)
+    if not requirement.marker:  # Short circuit to favour the common case.
+        return requirement, None
+    match = EXTRA_RE.match(s)
+    if not match:   # No final "extra" expression, yay.
+        return requirement, None
+    extra = match.group('extra')
+    if not extra:
+        return requirement, None
+    s = match.group('requirement').rstrip()
+    if s.endswith('and'):
+        s = s[:-3].rstrip()
+    if s.endswith(';'):
+        s = s[:-1].rstrip()
+    return Requirement(s), extra
+
+
+def _add_requires(entry, base, extras):
+    """Append all requirements in an entry to the list.
+
+    This combines the `environment` key's content into the requirement's
+    existing markers, and append them to the appropriate list(s).
+    """
+    requires = entry.get('requires')
+    if not requires:
         return
-    req_iter = (Requirement(s) for s in requires)
-    environment = entry.get('environment')
-    extra = entry.get('extra')
-    if not environment and not extra:
-        return req_iter
-    requirements = list(req_iter)
-    for r in requirements:
-        mparts = []
-        if r.marker:
-            mparts.append(r.marker)
+    environment = entry.get('requirement')
+    e_extra = entry.get('extra')
+    for s in requires:
+        r, r_extra = _parse_requirement(s)
         if environment:
-            mparts.append(environment)
-        if extra:
-            mparts.append('extra == {!r}'.format(extra))
-        if len(mparts) > 1:
-            m = Marker(' and '.join('({})'.format(p) for p in mparts))
-        else:
-            m = Marker(mparts[0])
-        r.marker = m
-    return iter(requirements)
+            if r.marker:
+                m = Marker('({}) and ({})'.format(environment, r.marker))
+            else:
+                m = Marker(environment)
+            r.marker = m
+        if not e_extra and not r_extra:
+            base.append(r)
+        elif e_extra:
+            extras[e_extra].append(r)
+        elif r_extra:
+            extras[r_extra].append(r)
 
 
 class DependencySet(object):
@@ -38,8 +81,9 @@ class DependencySet(object):
     execution environment. Our resolver needs this to give a machine-agnostic
     dependency tree.
     """
-    def __init__(self, requirements):
-        self.requirements = list(requirements)
+    def __init__(self, base, extras):
+        self.base = base
+        self.extras = extras
         # TODO: We probably want to include some other metadata as well?
 
     @classmethod
@@ -49,10 +93,13 @@ class DependencySet(object):
         `wheel` is a `distlib.wheel.Wheel` instance. The metadata is read to
         build the instance.
         """
-        return cls(itertools.chain.from_iterable(
-            _iter_requirements(entry)
-            for entry in wheel.metadata.run_requires
-        ))
+        base = []
+        extras = collections.defaultdict(list)
+        for entry in wheel.metadata.run_requires:
+            if isinstance(entry, six.text_type):
+                entry = {'requires': [entry]}
+            _add_requires(entry, base, extras)
+        return cls(base, extras)
 
     @classmethod
     def from_data(cls, info):
@@ -60,7 +107,14 @@ class DependencySet(object):
 
         `info` is a dict-like object, e.g. decoded from a JSON API.
         """
-        return cls(Requirement(s) for s in (info['requires_dist'] or []))
-
-    def __repr__(self):
-        return 'DependencySet(requirements={!r})'.format(self.requirements)
+        base = []
+        extras = collections.defaultdict(list)
+        for s in info['requires_dist']:
+            requirement, extra = _parse_requirement(s)
+            if not extra:
+                base.append(requirement)
+            else:
+                extra_reqs = extras[extra]
+                extra_reqs.append(requirement)
+                extras[extra] = extra_reqs
+        return cls(base, extras)
