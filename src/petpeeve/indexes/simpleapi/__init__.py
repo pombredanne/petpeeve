@@ -15,7 +15,8 @@ class SimplePageParser(six.moves.html_parser.HTMLParser):
     """Parser to scrap links from a simple API page.
     """
     def __init__(self):
-        super(SimplePageParser, self).__init__()
+        # Can't use super() because HTMLParser was an old-style class.
+        six.moves.html_parser.HTMLParser.__init__(self)
         self.links = []
 
     def handle_starttag(self, tag, attrs):
