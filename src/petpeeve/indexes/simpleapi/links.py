@@ -10,11 +10,8 @@ from wheel import pep425tags
 
 from petpeeve.wheels import get_built_wheel_path, get_wheel_path
 
+from ..exceptions import WheelNotFoundError
 from ..utils import is_version_specified
-
-
-class WheelNotFoundError(OSError):
-    pass
 
 
 class Link(object):

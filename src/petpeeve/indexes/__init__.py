@@ -3,7 +3,7 @@ from pip._vendor import six
 from petpeeve._compat import collections_abc
 
 from . import legacyjsonapi, simpleapi
-from .exceptions import APIError
+from .exceptions import APIError, WheelNotFoundError
 
 
 class JSONEnabledDependencyMapping(collections_abc.Mapping):
@@ -28,7 +28,11 @@ class JSONEnabledDependencyMapping(collections_abc.Mapping):
         return key in self.mappings[0].links
 
     def __getitem__(self, key):
-        for mapping in self.mappings:
+        try:
+            return self.mappings[0][key]
+        except (KeyError, WheelNotFoundError):
+            pass
+        for mapping in self.mappings[1:]:
             try:
                 value = mapping[key]
             except KeyError:
