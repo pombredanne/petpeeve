@@ -11,7 +11,6 @@ from wheel import pep425tags
 from petpeeve.wheels import get_built_wheel_path, get_wheel_path
 
 from ..exceptions import WheelNotFoundError
-from ..utils import is_version_specified
 
 
 class Link(object):
@@ -40,23 +39,6 @@ class Link(object):
 
     def parse_for_info(self):
         raise NotImplementedError
-
-    def is_specified_by_requirement(self, requirement):
-        return is_version_specified(requirement.specifier, self.info.version)
-
-    def is_python_compatible(self, python_version_info):
-        """Check if the requires-python info matches specified environment.
-
-        If `python_version_info` is truthy, should be a 3+-tuple (e.g.
-        ``sys.version_info``). If falsy, result is always `True`.
-        """
-        if python_version_info:
-            python_version = packaging_version.parse('.'.join(
-                str(i) for i in python_version_info[:3]
-            ))
-            if not is_version_specified(self.python_specifier, python_version):
-                return False
-        return True
 
     def check_download(self, data):
         """Check if the downloaded data is good.

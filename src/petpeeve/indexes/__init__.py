@@ -1,49 +1,12 @@
-from pip._vendor import six
+import logging
 
-from petpeeve._compat import collections_abc
+from pip._vendor import six
 
 from . import legacyjsonapi, simpleapi
 from .exceptions import APIError, WheelNotFoundError
 
 
-class JSONEnabledDependencyMapping(collections_abc.Mapping):
-    """Wraps mappings from simple and JSON indexes to do the optimal thing.
-    """
-    def __init__(
-            self, version_info_getters, version_links,
-            python_version_info, offline=False):
-        self.mappings = [simpleapi.DependencyMapping(
-            version_links, python_version_info, offline=True,
-        )]
-        if offline:
-            return
-        self.mappings += [
-            legacyjsonapi.DependencyMapping(version_info_getters),
-            simpleapi.DependencyMapping(
-                version_links, python_version_info, offline=False,
-            ),
-        ]
-
-    def __contains__(self, key):
-        return key in self.mappings[0].links
-
-    def __getitem__(self, key):
-        try:
-            return self.mappings[0][key]
-        except (KeyError, WheelNotFoundError):
-            pass
-        for mapping in self.mappings[1:]:
-            try:
-                value = mapping[key]
-            except KeyError:
-                continue
-            return value
-
-    def __iter__(self):
-        return iter(self.mappings[0].versions)
-
-    def __len__(self):
-        return len(self.mappings[0].versions)
+logger = logging.getLogger('petpeeve.indexes')
 
 
 class JSONEnabledIndex(object):
@@ -53,21 +16,20 @@ class JSONEnabledIndex(object):
         self.simple = simpleapi.IndexServer(simple_url)
         self.legacy_json = legacyjsonapi.IndexServer(json_url)
 
-    def get_dependencies(
-            self, requirement, python_version_info, offline=False):
-        version_links = self.simple.get_versioned_links(requirement)
+    def get_dependencies(self, candidate, offline=False):
         try:
-            getters = self.legacy_json.get_version_info_getters(requirement)
-        except APIError:    # JSON API is not available; use simple.
-            return simpleapi.DependencyMapping(
-                version_links=version_links,
-                python_version_info=python_version_info,
-                offline=offline,
-            )
-        return JSONEnabledDependencyMapping(
-            version_info_getters=getters, version_links=version_links,
-            python_version_info=python_version_info, offline=offline,
-        )
+            logger.debug('Trying Wheel cache...')
+            return self.simple.get_dependencies(candidate, offline=True)
+        except WheelNotFoundError:
+            pass
+        try:
+            logger.debug('Trying JSON API...')
+            return self.legacy_json.get_dependencies(candidate)
+        except APIError:    # JSON API is not available.
+            if offline:
+                raise
+        logger.debug('Trying to download an artifact for inspection...')
+        return self.simple.get_dependencies(candidate, offline=False)
 
 
 class SimpleIndex(simpleapi.IndexServer):

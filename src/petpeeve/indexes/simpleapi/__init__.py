@@ -1,14 +1,14 @@
-import collections
 import posixpath
+import warnings
 
 from pip._vendor import requests, six
 from pip._vendor.packaging import specifiers as packaging_specifiers
 
 from petpeeve._compat.functools import lru_cache
+from petpeeve.dependencies import DependencySet
 
 from ..exceptions import APIError, PackageNotFound
 from .links import select_link_constructor, UnwantedLink
-from .providers import DependencyMapping
 
 
 class SimplePageParser(six.moves.html_parser.HTMLParser):
@@ -55,6 +55,14 @@ class SimplePageParser(six.moves.html_parser.HTMLParser):
 PYPI_PAGE_CACHE_SIZE = 64   # Should be reasonable?
 
 
+def _link_sort_key(link):
+    try:
+        is_binary_compatible = link.is_binary_compatible
+    except AttributeError:
+        return 0
+    return 1 if is_binary_compatible() else -1
+
+
 class IndexServer(object):
 
     def __init__(self, base_url):
@@ -74,33 +82,22 @@ class IndexServer(object):
         parser.feed(response.text)
         return parser.links
 
-    def get_versioned_links(self, requirement):
-        version_links = collections.defaultdict(list)
-        for link in self._get_package_links(requirement.name):
-            if not link.is_specified_by_requirement(requirement):
-                continue
-            try:
-                version = link.info.version
-            except AttributeError:
-                continue
-            version_links[version].append(link)
-        return version_links
+    def get_links(self, candidate):
+        return sorted((
+            link for link in self._get_package_links(candidate.name)
+            if link.info.version == candidate.version
+        ), key=_link_sort_key)
 
-    def get_dependencies(
-            self, requirement, python_version_info, offline=False):
-        """Discover dependencies for this requirement.
+    def get_dependencies(self, candidate, offline=False):
+        """Discover dependencies for this candidate.
 
-        Returns an object that behaves like a ``collection.OrderedDict``. Each
-        key is a version matching the requirement (latest version first); each
-        value is a list of requirements representing dependencies specified by
-        that version.
-
-        :param requirement: A :class:`packaging.requirements.Requirement`
-            instance specifying a package requirement.
-        :param python_version_info: A 3+ tuple of integers, or `None`.
+        Returns a collection of :class:`packaging.requirements.Requirement`
+        instances, specifying dependencies of this candidate.
         """
-        return DependencyMapping(
-            version_links=self.get_versioned_links(requirement),
-            python_version_info=python_version_info,
-            offline=offline,
-        )
+        for link in self.get_links(candidate):
+            wheel = link.as_wheel(offline=offline)
+            if not wheel:
+                continue
+            return DependencySet.from_wheel(wheel)
+        warnings.warn('failed to find dependencies with the Simple API')
+        return []

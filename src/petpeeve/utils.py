@@ -28,3 +28,9 @@ def download_file(url, filename=None, container=None, check=None):
     with open(path, 'wb') as f:
         f.write(data)
     return path
+
+
+def is_version_specified(specifier, version):
+    for _ in specifier.filter([version]):
+        return True
+    return False

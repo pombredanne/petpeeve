@@ -1,19 +1,14 @@
-import functools
 import posixpath
 
 from pip._vendor import requests
-from pip._vendor.packaging.version import parse as parse_version
 
 from petpeeve._compat.functools import lru_cache
+from petpeeve.dependencies import DependencySet
 
-from ..exceptions import APIError, PackageNotFound, VersionNotFound
-from ..utils import is_version_specified
-from .providers import DependencyMapping
+from ..exceptions import APIError, VersionNotFound
 
 
-# Should be reasonable?
-PYPI_PACKAGE_CACHE_SIZE = 64
-PYPI_VERSION_CACHE_SIZE = 1024
+PYPI_VERSION_CACHE_SIZE = 1024  # Should be reasonable?
 
 
 class IndexServer(object):
@@ -38,35 +33,14 @@ class IndexServer(object):
         data = response.json()
         return data['info']
 
-    @lru_cache(maxsize=PYPI_PACKAGE_CACHE_SIZE)
-    def get_version_info_getters(self, requirement):
-        package = requirement.name
-        response = self._get(package)
-        if response.status_code == 404:
-            raise PackageNotFound(package)
-        elif not response.ok:
-            raise APIError(response.reason)
-        try:
-            data = response.json()
-            releases = data['releases']
-        except (KeyError, ValueError, TypeError):
-            raise APIError('incompatible')
-        return {
-            v: functools.partial(self._get_version_info, package, k)
-            for k, v in ((k, parse_version(k)) for k in releases)
-            if is_version_specified(requirement.specifier, v)
-        }
+    def get_dependencies(self, candidate):
+        """Discover dependencies for this candidate.
 
-    def get_dependencies(self, requirement):
-        """Discover dependencies for this requirement.
-
-        Returns an object that behaves like a ``collection.OrderedDict``. Each
-        key is a version matching the requirement (latest version first); each
-        value is a list of requirements representing dependencies specified by
-        that version.
-
-        :param requirement: A :class:`packaging.requirements.Requirement`
-            instance specifying a package requirement.
+        Returns a collection of :class:`packaging.requirements.Requirement`
+        instances, specifying dependencies of this candidate.
         """
-        getters = self.get_version_info_getters(requirement)
-        return DependencyMapping(version_info_getters=getters)
+        info = self._get_version_info(candidate.name, str(candidate.version))
+        requires_dist = info.get('requires_dist')
+        if requires_dist is None:
+            requires_dist = []
+        return DependencySet.from_data(requires_dist)

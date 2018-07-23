@@ -2,33 +2,35 @@ from __future__ import print_function
 
 import argparse
 
+from petpeeve.candidates import Candidate
 from petpeeve.indexes import build_index, SimpleIndex
-from pip._vendor.packaging.requirements import Requirement
+from pip._vendor.packaging.version import parse as parse_version
+
+
+class VersionAction(argparse.Action):
+    def __call__(self, parser, options, value, option_string=None):
+        setattr(options, self.dest, parse_version(value))
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('requirement')
+parser.add_argument('name')
+parser.add_argument('version', action=VersionAction)
 parser.add_argument('--url', action='store', default='https://pypi.org/simple')
 parser.add_argument('--simple', action='store_true')
 parser.add_argument('--offline', action='store_true')
 options = parser.parse_args()
 
 
-requirement = Requirement(options.requirement)
+candidate = Candidate(name=options.name, version=options.version)
 if options.simple:
     index = SimpleIndex(options.url)
 else:
     index = build_index(options.url)
 print('Using {!r}...'.format(type(index).__name__))
 
-dependency_mapping = index.get_dependencies(
-    requirement, None, offline=options.offline,
-)
+depset = index.get_dependencies(candidate, offline=options.offline)
 
-latest_version = next(iter(dependency_mapping.keys()))
-
-depset = dependency_mapping[latest_version]
-print('Version {}:'.format(latest_version))
+print('Version {}:'.format(options.version))
 for requirement in depset.base:
     print('    {}'.format(requirement))
 print()
