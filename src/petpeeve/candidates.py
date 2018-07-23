@@ -43,11 +43,12 @@ class Candidate(object):
     def get_dependencies(self, indexes, offline=False):
         if self.url:
             wheel = parse_link(self.url, None).as_wheel(offline=offline)
-            return RequirementSpecification.from_wheel(wheel)
+            reqset = RequirementSpecification.from_wheel(wheel)
+            return reqset.get_dependencies(self.extras)
         for index in indexes:
             try:
                 return index.get_dependencies(self, offline=offline)
             except APIError:
                 pass
         warnings.warn('failed to retrieve dependencies for {}'.format(self))
-        RequirementSpecification.empty()
+        return set()

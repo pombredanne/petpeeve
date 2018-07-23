@@ -1,5 +1,6 @@
 import collections
 import re
+import warnings
 
 from pip._vendor import six
 from pip._vendor.packaging.markers import Marker
@@ -122,3 +123,18 @@ class RequirementSpecification(object):
                 extra_reqs.add(requirement)
                 extras[extra] = extra_reqs
         return cls(base, extras)
+
+    def get_dependencies(self, extras):
+        deps = set(self.base)
+        if not extras:
+            return deps
+        for extra in extras:
+            try:
+                extra_deps = self.extras[extra]
+            except KeyError:
+                warnings.warn('dropping unknown extra {!r} for {}'.format(
+                    extra, self,
+                ))
+            else:
+                deps.update(extra_deps)
+        return deps

@@ -2,7 +2,7 @@ import logging
 
 from pip._vendor import six
 
-from petpeeve.wheels import WheelNotFoundError
+from petpeeve.links import WheelNotFoundError
 
 from . import legacyjsonapi, simpleapi
 from .exceptions import APIError

@@ -9,7 +9,11 @@ from pip._vendor.distlib.wheel import Wheel
 from pip._vendor.packaging import version as packaging_version
 from wheel import pep425tags
 
-from .wheels import WheelNotFoundError, get_built_wheel_path, get_wheel_path
+from .wheels import get_built_wheel_path, get_wheel_path
+
+
+class WheelNotFoundError(OSError):
+    pass
 
 
 class Link(object):

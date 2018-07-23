@@ -36,11 +36,11 @@ class IndexServer(object):
     def get_dependencies(self, candidate):
         """Discover dependencies for this candidate.
 
-        Returns a `RequirementSpefication` instance, specifying base and extra
-        dependencies of this candidate.
+        Returns a collection of `Requirement` instances.
         """
         info = self._get_version_info(candidate.name, str(candidate.version))
         requires_dist = info.get('requires_dist')
         if requires_dist is None:
-            return RequirementSpecification.empty()
-        return RequirementSpecification.from_data(requires_dist)
+            return set()
+        reqset = RequirementSpecification.from_data(requires_dist)
+        return reqset.get_dependencies(candidate.extras)

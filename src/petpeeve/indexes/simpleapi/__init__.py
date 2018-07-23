@@ -5,7 +5,7 @@ from pip._vendor import requests, six
 from pip._vendor.packaging import specifiers as packaging_specifiers
 
 from petpeeve._compat.functools import lru_cache
-from petpeeve.links import parse_link, UnwantedLink
+from petpeeve.links import parse_link, UnwantedLink, WheelNotFoundError
 from petpeeve.requirements import RequirementSpecification
 
 from ..exceptions import APIError, PackageNotFound
@@ -84,11 +84,14 @@ class IndexServer(object):
     def get_dependencies(self, candidate, offline=False):
         """Discover dependencies for this candidate.
 
-        Returns a `RequirementSpecification` instance, specifying base and
-        extra dependencies of this candidate.
+        Returns a collection of `Requirement` instances.
         """
         for link in self.get_links(candidate):
-            wheel = link.as_wheel(offline=offline)
-            return RequirementSpecification.from_wheel(wheel)
+            try:
+                wheel = link.as_wheel(offline=offline)
+            except WheelNotFoundError:
+                continue
+            reqset = RequirementSpecification.from_wheel(wheel)
+            return reqset.get_dependencies(candidate.extras)
         warnings.warn('failed to find dependencies with the Simple API')
-        return RequirementSpecification.empty()
+        return set()
