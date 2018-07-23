@@ -1,5 +1,4 @@
 import posixpath
-import warnings
 
 from pip._vendor import requests, six
 from pip._vendor.packaging import specifiers as packaging_specifiers
@@ -9,7 +8,7 @@ from petpeeve.candidates import Candidate
 from petpeeve.links import parse_link, UnwantedLink
 from petpeeve.requirements import RequirementSpecification
 
-from ..exceptions import APIError, PackageNotFound
+from ..exceptions import APIError, PackageNotFound, VersionNotFound
 
 
 class SimplePageParser(six.moves.html_parser.HTMLParser):
@@ -99,8 +98,7 @@ class IndexServer(object):
         links = self._get_links(candidate)
         if links:
             return _get_dependencies_from(links[0], candidate.extras, offline)
-        warnings.warn('failed to find dependencies with the Simple API')
-        return set()
+        raise VersionNotFound(candidate.name, str(candidate.version))
 
     def get_candidates(self, requirement):
         """Find candidates for this requirement.

@@ -31,7 +31,7 @@ class IndexServer(object):
     def _get_version_info(self, package, ver):
         response = self._get(package, ver)
         if response.status_code == 404:
-            raise VersionNotFound(package)
+            raise VersionNotFound(package, ver)
         elif not response.ok:
             raise APIError(response.reason)
         data = response.json()

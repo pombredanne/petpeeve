@@ -7,4 +7,7 @@ class PackageNotFound(APIError, ValueError):
 
 
 class VersionNotFound(APIError, KeyError):
-    pass
+    def __init__(self, package, version):
+        super(VersionNotFound, self).__init__(
+            '{}=={}'.format(package, version),
+        )
