@@ -3,7 +3,7 @@ import posixpath
 from pip._vendor import requests
 
 from petpeeve._compat.functools import lru_cache
-from petpeeve.dependencies import DependencySet
+from petpeeve.requirements import RequirementSpecification
 
 from ..exceptions import APIError, VersionNotFound
 
@@ -36,11 +36,11 @@ class IndexServer(object):
     def get_dependencies(self, candidate):
         """Discover dependencies for this candidate.
 
-        Returns a collection of :class:`packaging.requirements.Requirement`
-        instances, specifying dependencies of this candidate.
+        Returns a `RequirementSpefication` instance, specifying base and extra
+        dependencies of this candidate.
         """
         info = self._get_version_info(candidate.name, str(candidate.version))
         requires_dist = info.get('requires_dist')
         if requires_dist is None:
-            requires_dist = []
-        return DependencySet.from_data(requires_dist)
+            return RequirementSpecification.empty()
+        return RequirementSpecification.from_data(requires_dist)

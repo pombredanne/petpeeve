@@ -5,7 +5,7 @@ from pip._vendor import requests, six
 from pip._vendor.packaging import specifiers as packaging_specifiers
 
 from petpeeve._compat.functools import lru_cache
-from petpeeve.dependencies import DependencySet
+from petpeeve.requirements import RequirementSpefication
 
 from ..exceptions import APIError, PackageNotFound
 from .links import select_link_constructor, UnwantedLink
@@ -91,13 +91,13 @@ class IndexServer(object):
     def get_dependencies(self, candidate, offline=False):
         """Discover dependencies for this candidate.
 
-        Returns a collection of :class:`packaging.requirements.Requirement`
-        instances, specifying dependencies of this candidate.
+        Returns a `RequirementSpefication` instance, specifying base and extra
+        dependencies of this candidate.
         """
         for link in self.get_links(candidate):
             wheel = link.as_wheel(offline=offline)
             if not wheel:
                 continue
-            return DependencySet.from_wheel(wheel)
+            return RequirementSpefication.from_wheel(wheel)
         warnings.warn('failed to find dependencies with the Simple API')
-        return []
+        return RequirementSpefication.empty()

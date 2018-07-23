@@ -74,7 +74,7 @@ def _add_requires(entry, base, extras):
             extras[r_extra].add(r)
 
 
-class DependencySet(object):
+class RequirementSpecification(object):
     """A representation of dependencies of a distribution.
 
     This representation is abstract, i.e. completely independent from the
@@ -85,6 +85,10 @@ class DependencySet(object):
         self.base = base
         self.extras = extras
         # TODO: We probably want to include some other metadata as well?
+
+    @classmethod
+    def empty(cls):
+        return cls([], {})
 
     @classmethod
     def from_wheel(cls, wheel):
