@@ -1,3 +1,8 @@
+import warnings
+
+from .indexes.exceptions import APIError
+from .links import parse_link
+from .requirements import RequirementSpecification
 from .utils import is_version_specified
 
 
@@ -34,3 +39,15 @@ class Candidate(object):
         if self.url:
             parts.append(' @ {}'.format(self.url))
         return ''.join(parts)
+
+    def get_dependencies(self, indexes, offline=False):
+        if self.url:
+            wheel = parse_link(self.url, None).as_wheel(offline=offline)
+            return RequirementSpecification.from_wheel(wheel)
+        for index in indexes:
+            try:
+                return index.get_dependencies(self, offline=offline)
+            except APIError:
+                pass
+        warnings.warn('failed to retrieve dependencies for {}'.format(self))
+        RequirementSpecification.empty()

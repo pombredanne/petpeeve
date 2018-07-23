@@ -5,10 +5,10 @@ from pip._vendor import requests, six
 from pip._vendor.packaging import specifiers as packaging_specifiers
 
 from petpeeve._compat.functools import lru_cache
-from petpeeve.requirements import RequirementSpefication
+from petpeeve.links import parse_link, UnwantedLink
+from petpeeve.requirements import RequirementSpecification
 
 from ..exceptions import APIError, PackageNotFound
-from .links import select_link_constructor, UnwantedLink
 
 
 class SimplePageParser(six.moves.html_parser.HTMLParser):
@@ -28,28 +28,21 @@ class SimplePageParser(six.moves.html_parser.HTMLParser):
         for attr, value in attrs:
             if attr == 'href':
                 url_parts = six.moves.urllib_parse.urlsplit(value)
-                checksum = url_parts.fragment
-                url_parts = url_parts._replace(fragment='')
+                replacements = {
+                    fn: part
+                    for fn, part in zip(url_parts._fields, url_parts)
+                    if part or fn == 'fragment'
+                }
+                url_parts = self.base_url_parts._replace(**replacements)
             elif attr == 'data-requires-python':
                 python_specifier = packaging_specifiers.SpecifierSet(value)
         if not url_parts:
             return
         try:
-            replacements = {
-                fn: part
-                for fn, part in zip(url_parts._fields, url_parts)
-                if part or fn == 'fragment'
-            }
-            url = six.moves.urllib_parse.urlunsplit(
-                self.base_url_parts._replace(**replacements),
-            )
-            link_ctor = select_link_constructor(url.rsplit('/', 1)[-1])
+            link = parse_link(url_parts, python_specifier)
         except UnwantedLink:
             return
-        self.links.append(link_ctor(
-            url=url, checksum=checksum,
-            python_specifier=python_specifier,
-        ))
+        self.links.append(link)
 
 
 PYPI_PAGE_CACHE_SIZE = 64   # Should be reasonable?
@@ -91,13 +84,11 @@ class IndexServer(object):
     def get_dependencies(self, candidate, offline=False):
         """Discover dependencies for this candidate.
 
-        Returns a `RequirementSpefication` instance, specifying base and extra
-        dependencies of this candidate.
+        Returns a `RequirementSpecification` instance, specifying base and
+        extra dependencies of this candidate.
         """
         for link in self.get_links(candidate):
             wheel = link.as_wheel(offline=offline)
-            if not wheel:
-                continue
-            return RequirementSpefication.from_wheel(wheel)
+            return RequirementSpecification.from_wheel(wheel)
         warnings.warn('failed to find dependencies with the Simple API')
-        return RequirementSpefication.empty()
+        return RequirementSpecification.empty()

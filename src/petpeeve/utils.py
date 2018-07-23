@@ -24,6 +24,8 @@ def download_file(url, filename=None, container=None, check=None):
     if container is None:
         container = tempfile.mkdtemp()
         atexit.register(shutil.rmtree, container, ignore_errors=True)
+    else:
+        os.makedirs(container)
     path = os.path.join(container, filename)
     with open(path, 'wb') as f:
         f.write(data)

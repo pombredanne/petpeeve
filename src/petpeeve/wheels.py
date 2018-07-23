@@ -12,6 +12,10 @@ from petpeeve.pip_internal.utils.misc import unpack_file
 from .utils import download_file
 
 
+class WheelNotFoundError(OSError):
+    pass
+
+
 class PipLink(object):
     """A pip-compatible link object.
     """

@@ -8,7 +8,3 @@ class PackageNotFound(APIError, ValueError):
 
 class VersionNotFound(APIError, KeyError):
     pass
-
-
-class WheelNotFoundError(OSError):
-    pass

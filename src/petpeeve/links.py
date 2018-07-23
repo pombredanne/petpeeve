@@ -4,17 +4,19 @@ import hashlib
 import sys
 import warnings
 
+from pip._vendor import six
 from pip._vendor.distlib.wheel import Wheel
 from pip._vendor.packaging import version as packaging_version
 from wheel import pep425tags
 
-from petpeeve.wheels import get_built_wheel_path, get_wheel_path
-
-from ..exceptions import WheelNotFoundError
+from .wheels import WheelNotFoundError, get_built_wheel_path, get_wheel_path
 
 
 class Link(object):
-    """Represents a link in the simple API page.
+    """Represents a link to a package.
+
+    Links are usually found in a Simple API page, but can also be specified
+    directly in a Requirement with PEP 508's URL-based lookup.
     """
     def __init__(
             self, url, checksum,
@@ -148,7 +150,7 @@ WANTED_EXTENSIONS = [
 ]
 
 
-def select_link_constructor(filename):
+def _select_link_klass(filename):
     """Parse the file name to recognize an artifact type.
 
     This is important because we need to somehow handle the sdist .tar.gz
@@ -162,3 +164,18 @@ def select_link_constructor(filename):
                 file_extension=ext,
             )
     raise UnwantedLink(filename)
+
+
+def parse_link(url, python_specifier):
+    if isinstance(url, six.string_types):
+        parts = six.moves.urllib_parse.urlsplit(url)
+    else:
+        parts = url
+    checksum = parts.fragment
+    parts = parts._replace(fragment='')
+
+    klass = _select_link_klass(parts.path.rsplit('/', 1)[-1])
+    return klass(
+        url=six.moves.urllib_parse.urlunsplit(parts),
+        checksum=checksum, python_specifier=python_specifier,
+    )

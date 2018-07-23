@@ -2,8 +2,10 @@ import logging
 
 from pip._vendor import six
 
+from petpeeve.wheels import WheelNotFoundError
+
 from . import legacyjsonapi, simpleapi
-from .exceptions import APIError, WheelNotFoundError
+from .exceptions import APIError
 
 
 logger = logging.getLogger('petpeeve.indexes')
