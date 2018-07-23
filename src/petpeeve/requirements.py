@@ -4,7 +4,7 @@ import warnings
 
 from pip._vendor import six
 from pip._vendor.packaging.markers import Marker
-from pip._vendor.packaging.requirements import Requirement
+from pip._vendor.packaging.requirements import Requirement as BaseRequirement
 
 
 # I heard Warehouse and Wheel always put the extra marker at the end, and the
@@ -14,38 +14,51 @@ EXTRA_RE = re.compile(
 )
 
 
-def _parse_requirement(s):
-    """Helper function to parse both modern and "legacy" requirement styles.
+class Requirement(BaseRequirement):
+    """Extended requirement representation.
 
-    Old requirements append the extra key at the end of the environment
-    markers, e.g.::
-
-        PySocks (!=1.5.7,>=1.5.6); extra == 'socks'
-
-    This uses a very naive pattern-matching logic to strip that last part out
-    of the environment markers.
-
-    This kind of formats are used in old wheels and the PyPI's JSON API.
-
-    Returns a 2-tuple `(requirement, extra)`. The first member is a
-    `Requirement` instance, and the second the extra's name. If no extra is
-    detected, the second member will be `None`.
+    This adds helper functions to the basic requirement class, and makes it
+    hashable and works in a set.
     """
-    requirement = Requirement(s)
-    if not requirement.marker:  # Short circuit to favour the common case.
-        return requirement, None
-    match = EXTRA_RE.match(s)
-    if not match:   # No final "extra" expression, yay.
-        return requirement, None
-    extra = match.group('extra')
-    if not extra:
-        return requirement, None
-    s = match.group('requirement').rstrip()
-    if s.endswith('and'):
-        s = s[:-3].rstrip()
-    if s.endswith(';'):
-        s = s[:-1].rstrip()
-    return Requirement(s), extra
+    @classmethod
+    def parse(cls, s):
+        """Parse both modern and "legacy" requirement styles.
+
+        Old requirements append the extra key at the end of the environment
+        markers, e.g.::
+
+            PySocks (!=1.5.7,>=1.5.6); extra == 'socks'
+
+        This uses a very naive pattern-matching logic to strip that last part
+        out of the environment markers.
+
+        This kind of formats are used in old wheels and the PyPI's JSON API.
+
+        Returns a 2-tuple `(requirement, extra)`. The first member is a
+        `Requirement` instance, and the second the extra's name. If no extra is
+        detected, the second member will be `None`.
+        """
+        requirement = cls(s)
+        if not requirement.marker:  # Short circuit to favour the common case.
+            return requirement, None
+        match = EXTRA_RE.match(s)
+        if not match:   # No final "extra" expression, yay.
+            return requirement, None
+        extra = match.group('extra')
+        if not extra:
+            return requirement, None
+        s = match.group('requirement').rstrip()
+        if s.endswith('and'):
+            s = s[:-3].rstrip()
+        if s.endswith(';'):
+            s = s[:-1].rstrip()
+        return cls(s), extra
+
+    def __hash__(self):
+        return hash(str(self))
+
+    def __eq__(self, other):
+        return str(self) == str(other)
 
 
 def _add_requires(entry, base, extras):
@@ -60,7 +73,7 @@ def _add_requires(entry, base, extras):
     environment = entry.get('environment')
     e_extra = entry.get('extra')
     for s in requires:
-        r, r_extra = _parse_requirement(s)
+        r, r_extra = Requirement.parse(s)
         if environment:
             if r.marker:
                 m = Marker('({}) and ({})'.format(environment, r.marker))
@@ -115,7 +128,7 @@ class RequirementSpecification(object):
         base = set()
         extras = collections.defaultdict(set)
         for s in requires_dist:
-            requirement, extra = _parse_requirement(s)
+            requirement, extra = Requirement.parse(s)
             if not extra:
                 base.add(requirement)
             else:

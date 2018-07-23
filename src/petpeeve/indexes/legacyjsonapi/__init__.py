@@ -1,14 +1,18 @@
 import posixpath
 
 from pip._vendor import requests
+from pip._vendor.packaging.version import parse as parse_version
 
 from petpeeve._compat.functools import lru_cache
+from petpeeve.candidates import Candidate
 from petpeeve.requirements import RequirementSpecification
 
-from ..exceptions import APIError, VersionNotFound
+from ..exceptions import APIError, PackageNotFound, VersionNotFound
 
 
-PYPI_VERSION_CACHE_SIZE = 1024  # Should be reasonable?
+# Should be reasonable?
+PYPI_PACKAGE_CACHE_SIZE = 512
+PYPI_VERSION_CACHE_SIZE = 1024
 
 
 class IndexServer(object):
@@ -31,7 +35,24 @@ class IndexServer(object):
         elif not response.ok:
             raise APIError(response.reason)
         data = response.json()
-        return data['info']
+        try:
+            return data['info']
+        except KeyError:
+            raise APIError('non-comforming JSON API')
+
+    @lru_cache(maxsize=PYPI_PACKAGE_CACHE_SIZE)
+    def _get_versions(self, package):
+        response = self._get(package)
+        if response.status_code == 404:
+            raise PackageNotFound(package)
+        elif not response.ok:
+            raise APIError(response.reason)
+        data = response.json()
+        try:
+            releases = data['releases']
+        except KeyError:
+            raise APIError('non-comforming JSON API')
+        return [parse_version(k) for k, v in releases.items() if v]
 
     def get_dependencies(self, candidate):
         """Discover dependencies for this candidate.
@@ -44,3 +65,13 @@ class IndexServer(object):
             return set()
         reqset = RequirementSpecification.from_data(requires_dist)
         return reqset.get_dependencies(candidate.extras)
+
+    def get_candidates(self, requirement):
+        """Find candidates for this requirement.
+
+        Returns a collection of `Candidate` instances.
+        """
+        return set(
+            Candidate.pin_from(requirement, version)
+            for version in self._get_versions(requirement.name)
+        )

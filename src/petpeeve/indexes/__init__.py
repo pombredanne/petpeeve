@@ -24,14 +24,22 @@ class JSONEnabledIndex(object):
             return self.simple.get_dependencies(candidate, offline=True)
         except WheelNotFoundError:
             pass
-        try:
-            logger.debug('Trying JSON API...')
-            return self.legacy_json.get_dependencies(candidate)
-        except APIError:    # JSON API is not available.
-            if offline:
-                raise
+        if not candidate.url:
+            try:
+                logger.debug('Trying JSON API...')
+                return self.legacy_json.get_dependencies(candidate)
+            except APIError:    # JSON API is not available.
+                if offline:
+                    raise
         logger.debug('Trying to download an artifact for inspection...')
         return self.simple.get_dependencies(candidate, offline=False)
+
+    def get_candidates(self, requirement):
+        try:
+            return self.legacy_json.get_candidates(requirement)
+        except APIError:    # JSON API is not available.
+            pass
+        return self.simple.get_candidates(requirement)
 
 
 class SimpleIndex(simpleapi.IndexServer):

@@ -1,8 +1,3 @@
-import warnings
-
-from .indexes.exceptions import APIError
-from .links import parse_link
-from .requirements import RequirementSpecification
 from .utils import is_version_specified
 
 
@@ -35,20 +30,14 @@ class Candidate(object):
         parts = [self.name]
         if self.extras:
             parts.append('[{}]'.format(','.join(sorted(self.extras))))
-        parts.append('=={}'.format(self.version))
+        if self.version:
+            parts.append('=={}'.format(self.version))
         if self.url:
             parts.append(' @ {}'.format(self.url))
         return ''.join(parts)
 
-    def get_dependencies(self, indexes, offline=False):
-        if self.url:
-            wheel = parse_link(self.url, None).as_wheel(offline=offline)
-            reqset = RequirementSpecification.from_wheel(wheel)
-            return reqset.get_dependencies(self.extras)
-        for index in indexes:
-            try:
-                return index.get_dependencies(self, offline=offline)
-            except APIError:
-                pass
-        warnings.warn('failed to retrieve dependencies for {}'.format(self))
-        return set()
+    def __hash__(self):
+        return hash(str(self))
+
+    def __eq__(self, other):
+        return str(self) == str(other)

@@ -26,26 +26,24 @@ class VersionAction(argparse.Action):
 parser = argparse.ArgumentParser()
 parser.add_argument('package', action=PackageAction)
 parser.add_argument('version', action=VersionAction)
-parser.add_argument('--url', action='append', dest='urls')
+parser.add_argument('--url', action='store', default='https://pypi.org/simple')
 parser.add_argument('--simple', action='store_true')
 parser.add_argument('--offline', action='store_true')
 options = parser.parse_args()
 
 
-if not options.urls:
-    options.urls = ['https://pypi.org/simple']
 if options.simple:
     ctor = SimpleIndex
 else:
     ctor = build_index
+index = ctor(options.url)
 
 candidate = Candidate(
     name=options.name,
     extras=options.extras,
     version=options.version,
 )
-indexes = [ctor(url) for url in options.urls]
 
 print(candidate)
-for r in candidate.get_dependencies(indexes=indexes, offline=options.offline):
+for r in index.get_dependencies(candidate, offline=options.offline):
     print('  {}'.format(r))

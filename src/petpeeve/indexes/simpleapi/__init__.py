@@ -5,7 +5,8 @@ from pip._vendor import requests, six
 from pip._vendor.packaging import specifiers as packaging_specifiers
 
 from petpeeve._compat.functools import lru_cache
-from petpeeve.links import parse_link, UnwantedLink, WheelNotFoundError
+from petpeeve.candidates import Candidate
+from petpeeve.links import parse_link, UnwantedLink
 from petpeeve.requirements import RequirementSpecification
 
 from ..exceptions import APIError, PackageNotFound
@@ -56,6 +57,12 @@ def _link_sort_key(link):
     return 1 if is_binary_compatible() else -1
 
 
+def _get_dependencies_from(link, extras, offline):
+    wheel = link.as_wheel(offline=offline)
+    reqset = RequirementSpecification.from_wheel(wheel)
+    return reqset.get_dependencies(extras)
+
+
 class IndexServer(object):
 
     def __init__(self, base_url):
@@ -75,7 +82,7 @@ class IndexServer(object):
         parser.feed(response.text)
         return parser.links
 
-    def get_links(self, candidate):
+    def _get_links(self, candidate):
         return sorted((
             link for link in self._get_package_links(candidate.name)
             if link.info.version == candidate.version
@@ -86,12 +93,21 @@ class IndexServer(object):
 
         Returns a collection of `Requirement` instances.
         """
-        for link in self.get_links(candidate):
-            try:
-                wheel = link.as_wheel(offline=offline)
-            except WheelNotFoundError:
-                continue
-            reqset = RequirementSpecification.from_wheel(wheel)
-            return reqset.get_dependencies(candidate.extras)
+        if candidate.url:
+            link = parse_link(candidate.url)
+            return _get_dependencies_from(link, candidate.extras, offline)
+        links = self._get_links(candidate)
+        if links:
+            return _get_dependencies_from(links[0], candidate.extras, offline)
         warnings.warn('failed to find dependencies with the Simple API')
         return set()
+
+    def get_candidates(self, requirement):
+        """Find candidates for this requirement.
+
+        Returns a collection of `Candidate` instances.
+        """
+        return set(
+            Candidate.pin_from(requirement, link.info.version)
+            for link in self._get_package_links(requirement.name)
+        )
